@@ -1,2 +1,6 @@
-backend/node_modules/
-backend/.env
+venv/
+__pycache__/
+*.pyc
+.env
+data/
+*.bin
