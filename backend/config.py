@@ -18,8 +18,10 @@ EMBEDDING_DIM = 384  # dimension for all-MiniLM-L6-v2
 # --- Cache behavior ---
 SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.92"))
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", str(60 * 60 * 24)))  # 24h default
+MAX_CACHE_SIZE = int(os.getenv("MAX_CACHE_SIZE", "1000"))
 CACHE_INDEX_PATH = os.getenv("CACHE_INDEX_PATH", "./data/faiss_index.bin")
 CACHE_METADATA_PATH = os.getenv("CACHE_METADATA_PATH", "./data/cache_metadata.json")
+CACHE_DB_PATH = os.getenv("CACHE_DB_PATH", "./data/cache_db.sqlite")
 
 # --- LLM provider ---
 # "groq"   -> free-tier hosted API, real dollar-cost math, needs GROQ_API_KEY

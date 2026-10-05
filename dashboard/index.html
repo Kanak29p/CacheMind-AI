@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Semantic Cache Proxy — Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Semantic Cache Proxy — Dashboard & Playground</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
   :root {
@@ -14,22 +15,63 @@
     --accent: #5eead4;
     --hit: #34d399;
     --miss: #f97373;
+    --btn-bg: #222733;
+    --btn-hover: #2d3345;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    padding: 32px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
   }
-  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
-  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; color: #fff; }
+  .subtitle { color: var(--muted); font-size: 13px; }
+  .api-config {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+  .api-config input {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-family: monospace;
+    font-size: 12px;
+    width: 160px;
+  }
+  .api-config input:focus { outline: none; border-bottom: 1px solid var(--accent); }
+  
+  .error-banner {
+    background: rgba(249, 115, 115, 0.15);
+    border: 1px solid var(--miss);
+    color: var(--miss);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 20px;
+    display: none;
+  }
+
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     gap: 14px;
-    margin-bottom: 28px;
+    margin-bottom: 24px;
   }
   .card {
     background: var(--panel);
@@ -40,6 +82,74 @@
   .card .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
   .card .value { font-size: 24px; font-weight: 700; }
   .card .value.accent { color: var(--accent); }
+
+  .playground-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+  .preset-btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .preset-btn:hover { background: var(--btn-hover); border-color: var(--accent); }
+  
+  .prompt-area {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 12px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 70px;
+    margin-top: 12px;
+    margin-bottom: 12px;
+  }
+  .prompt-area:focus { outline: none; border-color: var(--accent); }
+  
+  .send-btn {
+    background: var(--accent);
+    color: #0f1115;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .send-btn:hover { opacity: 0.9; }
+
+  .res-box {
+    margin-top: 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    display: none;
+  }
+  .res-header {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 13px;
+    flex-wrap: wrap;
+  }
+
   .row { display: flex; gap: 20px; }
   .col { flex: 1; min-width: 0; }
   .panel-title { font-size: 13px; color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -50,12 +160,52 @@
   .badge.hit { background: rgba(52,211,153,0.15); color: var(--hit); }
   .badge.miss { background: rgba(249,115,115,0.15); color: var(--miss); }
   .prompt-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
-  canvas { max-height: 240px; }
+  canvas { max-height: 220px; }
 </style>
 </head>
 <body>
-  <h1>Semantic Caching Proxy</h1>
-  <div class="subtitle" id="subtitle">connecting to backend…</div>
+  <div class="header">
+    <div>
+      <h1>Semantic Caching Proxy</h1>
+      <div class="subtitle" id="subtitle">Connecting to proxy backend…</div>
+    </div>
+    <div class="api-config">
+      <span style="color: var(--muted);">API Base:</span>
+      <input type="text" id="apiBaseInput" value="" placeholder="http://localhost:8000" />
+      <button class="preset-btn" onclick="updateApiBase()" style="padding: 3px 8px;">Save</button>
+    </div>
+  </div>
+
+  <div class="error-banner" id="errorBanner">
+    <strong>Backend Unreachable:</strong> Could not connect to <span id="errorUrl"></span>. Ensure <code>uvicorn main:app --port 8000</code> is running.
+  </div>
+
+  <!-- Interactive Playground (Step 1) -->
+  <div class="playground-card">
+    <div class="panel-title">Interactive Playground ("Try it")</div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+      <span style="font-size: 12px; color: var(--muted); align-self: center;">Presets:</span>
+      <button class="preset-btn" onclick="setPrompt('How do I reset my password?')">Paraphrase A</button>
+      <button class="preset-btn" onclick="setPrompt('I forgot my password, how do I change it?')">Paraphrase B (Hits A)</button>
+      <button class="preset-btn" onclick="setPrompt('Cancel my subscription')">Near-Miss A</button>
+      <button class="preset-btn" onclick="setPrompt('Pause my subscription')">Near-Miss B (Different Intent)</button>
+    </div>
+    <textarea class="prompt-area" id="promptInput" placeholder="Type a prompt to send through the semantic cache proxy..."></textarea>
+    <button class="send-btn" onclick="sendTestChat()">
+      <span>Send Request</span>
+    </button>
+
+    <div class="res-box" id="resBox">
+      <div class="res-header">
+        <div>Status: <span class="badge" id="resStatus">—</span></div>
+        <div>Latency: <strong id="resLatency">—</strong></div>
+        <div>Similarity: <strong id="resSimilarity">—</strong></div>
+        <div id="resMatchContainer" style="display:none;">Matched Cached Prompt: <em id="resMatchedPrompt" style="color: var(--accent);">—</em></div>
+      </div>
+      <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">LLM Response:</div>
+      <div id="resText" style="font-size: 13px; line-height: 1.5; color: var(--text); white-space: pre-wrap; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;"></div>
+    </div>
+  </div>
 
   <div class="grid">
     <div class="card"><div class="label">Cache hit rate</div><div class="value accent" id="hitRate">—</div></div>
@@ -81,36 +231,131 @@
   </div>
 
 <script>
-const API_BASE = window.location.origin.includes("5500") || window.location.protocol === "file:"
-  ? "http://localhost:8000"
-  : "";
+const urlParams = new URLSearchParams(window.location.search);
+let API_BASE = urlParams.get('api_base') || localStorage.getItem('API_BASE') || (
+  window.location.origin.includes("5500") || window.location.protocol === "file:"
+    ? "http://localhost:8000"
+    : ""
+);
+
+document.getElementById('apiBaseInput').value = API_BASE;
+
+function updateApiBase() {
+  const val = document.getElementById('apiBaseInput').value.trim();
+  API_BASE = val;
+  localStorage.setItem('API_BASE', val);
+  refresh();
+}
 
 let chart;
 
 function initChart() {
-  const ctx = document.getElementById('hitMissChart').getContext('2d');
-  chart = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: ['Cache hits', 'Cache misses'],
-      datasets: [{ data: [0, 0], backgroundColor: ['#34d399', '#f97373'], borderWidth: 0 }]
-    },
-    options: {
-      plugins: { legend: { labels: { color: '#e6e8ec' } } },
-      cutout: '65%'
+  if (typeof Chart !== 'undefined') {
+    const ctx = document.getElementById('hitMissChart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Cache hits', 'Cache misses'],
+        datasets: [{ data: [0, 0], backgroundColor: ['#34d399', '#f97373'], borderWidth: 0 }]
+      },
+      options: {
+        plugins: { legend: { labels: { color: '#e6e8ec' } } },
+        cutout: '65%'
+      }
+    });
+  } else {
+    const canvas = document.getElementById('hitMissChart');
+    if (canvas && canvas.parentElement) {
+      canvas.parentElement.innerHTML = `
+        <div id="chartFallback" style="display:flex; align-items:center; justify-content:space-around; padding: 20px 0;">
+          <div style="text-align:center;">
+            <div style="width:120px; height:120px; border-radius:50%; background: conic-gradient(#34d399 0% 0%, #f97373 0% 100%); margin:0 auto;" id="donutGraphic"></div>
+          </div>
+          <div style="font-size:13px; line-height: 1.8;">
+            <div style="color:#34d399;">● Cache hits: <strong id="hitVal">0</strong></div>
+            <div style="color:#f97373;">● Cache misses: <strong id="missVal">0</strong></div>
+          </div>
+        </div>
+      `;
+      chart = {
+        data: { datasets: [{ data: [0, 0] }] },
+        update: function() {
+          const hits = this.data.datasets[0].data[0];
+          const misses = this.data.datasets[0].data[1];
+          const total = (hits + misses) || 1;
+          const hitPct = Math.round((hits / total) * 100);
+          const hitValEl = document.getElementById('hitVal');
+          const missValEl = document.getElementById('missVal');
+          const donutEl = document.getElementById('donutGraphic');
+          if (hitValEl) hitValEl.textContent = hits;
+          if (missValEl) missValEl.textContent = misses;
+          if (donutEl) donutEl.style.background = `conic-gradient(#34d399 0% ${hitPct}%, #f97373 ${hitPct}% 100%)`;
+        }
+      };
     }
-  });
+  }
+}
+
+function setPrompt(text) {
+  document.getElementById('promptInput').value = text;
+}
+
+async function sendTestChat() {
+  const prompt = document.getElementById('promptInput').value.trim();
+  if (!prompt) return;
+
+  const resBox = document.getElementById('resBox');
+  const resText = document.getElementById('resText');
+  resBox.style.display = 'block';
+  resText.textContent = 'Processing request...';
+
+  try {
+    const res = await fetch(`${API_BASE}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: prompt })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Proxy error');
+    }
+    const data = await res.json();
+    
+    const badge = document.getElementById('resStatus');
+    badge.textContent = data.cache_status.toUpperCase();
+    badge.className = `badge ${data.cache_status}`;
+    
+    document.getElementById('resLatency').textContent = `${data.latency_ms.toFixed(1)} ms`;
+    document.getElementById('resSimilarity').textContent = data.similarity != null ? data.similarity.toFixed(4) : 'N/A';
+    
+    const matchContainer = document.getElementById('resMatchContainer');
+    if (data.matched_prompt) {
+      matchContainer.style.display = 'inline-block';
+      document.getElementById('resMatchedPrompt').textContent = `"${data.matched_prompt}"`;
+    } else {
+      matchContainer.style.display = 'none';
+    }
+
+    resText.textContent = data.response;
+    refresh();
+  } catch (e) {
+    resText.textContent = `Error: ${e.message}`;
+  }
 }
 
 async function refresh() {
+  const errorBanner = document.getElementById('errorBanner');
   try {
     const [statsRes, recentRes] = await Promise.all([
       fetch(`${API_BASE}/stats`),
       fetch(`${API_BASE}/recent?limit=15`)
     ]);
+    if (!statsRes.ok || !recentRes.ok) throw new Error('Network response not ok');
+    
     const stats = await statsRes.json();
     const recent = await recentRes.json();
 
+    errorBanner.style.display = 'none';
     document.getElementById('subtitle').textContent =
       `connected · provider: ${stats.llm_provider} · ${stats.requests_in_window} requests observed`;
 
@@ -121,10 +366,12 @@ async function refresh() {
     document.getElementById('missLatency').textContent = stats.avg_miss_latency_ms != null ? `${stats.avg_miss_latency_ms} ms` : '—';
     document.getElementById('threshold').textContent = stats.similarity_threshold;
 
-    const hits = Math.round((stats.hit_rate_pct / 100) * stats.requests_in_window);
-    const misses = stats.requests_in_window - hits;
-    chart.data.datasets[0].data = [hits, misses];
-    chart.update();
+    if (chart) {
+      const hits = Math.round((stats.hit_rate_pct / 100) * stats.requests_in_window);
+      const misses = stats.requests_in_window - hits;
+      chart.data.datasets[0].data = [hits, misses];
+      chart.update();
+    }
 
     const tbody = document.getElementById('feedBody');
     tbody.innerHTML = recent.map(r => `
@@ -136,7 +383,9 @@ async function refresh() {
       </tr>
     `).join('');
   } catch (e) {
-    document.getElementById('subtitle').textContent = 'backend not reachable — is main.py running on :8000?';
+    errorBanner.style.display = 'block';
+    document.getElementById('errorUrl').textContent = `${API_BASE}/stats`;
+    document.getElementById('subtitle').textContent = 'Backend unreachable — verify server status';
   }
 }
 

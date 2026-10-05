@@ -5,13 +5,30 @@ Two zero-cost options, switchable via config.LLM_PROVIDER:
 - "groq": hosted, free-tier API (real dollar-cost math for your dashboard)
 - "ollama": fully local model, zero cost, zero rate limits, offline demo
 """
+import logging
 import time
 import requests
 import config
 
+logger = logging.getLogger("semantic_cache_proxy")
+
 
 class LLMError(Exception):
     pass
+
+
+def validate_provider_config():
+    """Verify LLM provider setup on startup. Fail loudly if misconfigured."""
+    logger.info(f"[STARTUP] Active LLM provider: '{config.LLM_PROVIDER}'")
+    valid_providers = {"groq", "ollama", "mock"}
+    if config.LLM_PROVIDER not in valid_providers:
+        raise RuntimeError(
+            f"Invalid LLM_PROVIDER '{config.LLM_PROVIDER}'. Must be one of {valid_providers}"
+        )
+    if config.LLM_PROVIDER == "groq" and not config.GROQ_API_KEY:
+        logger.warning(
+            "[STARTUP WARNING] GROQ_API_KEY not configured. Falling back to mock responses for cache miss queries."
+        )
 
 
 def call_llm(prompt: str) -> dict:
@@ -19,9 +36,16 @@ def call_llm(prompt: str) -> dict:
     start = time.time()
 
     if config.LLM_PROVIDER == "groq":
-        text = _call_groq(prompt)
+        if not config.GROQ_API_KEY:
+            text = f"[Mock LLM Response] Answer for: '{prompt}'. (Add GROQ_API_KEY in backend/.env for live Groq AI responses)"
+            time.sleep(0.15)  # simulate network latency
+        else:
+            text = _call_groq(prompt)
     elif config.LLM_PROVIDER == "ollama":
         text = _call_ollama(prompt)
+    elif config.LLM_PROVIDER == "mock":
+        text = f"[Mock LLM Response] Answer for: '{prompt}'"
+        time.sleep(0.15)
     else:
         raise LLMError(f"Unknown LLM_PROVIDER: {config.LLM_PROVIDER}")
 

@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 import config
 from cache import SemanticCache
-from llm_client import call_llm, LLMError
+from llm_client import call_llm, validate_provider_config, LLMError
 
 app = FastAPI(title="Semantic Caching LLM Proxy")
 
@@ -27,6 +27,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def startup_event():
+    validate_provider_config()
+
 
 cache = SemanticCache()
 
@@ -45,6 +51,7 @@ class ChatResponse(BaseModel):
     cache_status: Literal["hit", "miss"]
     latency_ms: float
     similarity: float | None = None
+    matched_prompt: str | None = None
 
 
 def _estimate_cost(input_tokens: int, output_tokens: int) -> float:
@@ -81,6 +88,7 @@ def chat(req: ChatRequest):
             cache_status="hit",
             latency_ms=latency_ms,
             similarity=cached["similarity"],
+            matched_prompt=cached["matched_query"],
         )
 
     # Cache miss -> actually call the LLM
@@ -106,6 +114,7 @@ def chat(req: ChatRequest):
         cache_status="miss",
         latency_ms=result["latency_ms"],
         similarity=None,
+        matched_prompt=None,
     )
 
 
