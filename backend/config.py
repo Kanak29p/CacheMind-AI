@@ -35,6 +35,10 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/generate")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 
+# --- Security & Auth ---
+API_KEY = os.getenv("API_KEY", "")  # Optional API key for proxy authentication
+RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
+
 # --- Cost model (for the dashboard's "dollars saved" math) ---
 # These are illustrative, editable rates ($ per 1M tokens). Update to match
 # whatever model you're "simulating" savings against, e.g. GPT-4o-mini.
@@ -42,3 +46,4 @@ COST_PER_1M_INPUT_TOKENS = float(os.getenv("COST_PER_1M_INPUT_TOKENS", "0.15"))
 COST_PER_1M_OUTPUT_TOKENS = float(os.getenv("COST_PER_1M_OUTPUT_TOKENS", "0.60"))
 # Rough chars-per-token estimate for quick cost math without a real tokenizer
 CHARS_PER_TOKEN = 4
+

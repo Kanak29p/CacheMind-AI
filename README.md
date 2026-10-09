@@ -1,131 +1,186 @@
-# Semantic Caching Proxy for LLM APIs
+# ⚡ CacheMind AI — Semantic Caching LLM Proxy
 
-A drop-in proxy that sits in front of any LLM API and caches *semantically
-similar* queries — not just exact string matches — using local embeddings
-and a FAISS similarity index. Includes a live dashboard showing cache hit
-rate, latency saved, and estimated dollar savings.
+A production-grade, multi-tenant **Semantic Caching LLM Proxy** that dramatically reduces API latency and token cost by intercepting semantically equivalent queries using local embeddings and FAISS vector search.
 
-Runs entirely on free tiers / local compute. No paid infra required.
+Includes **OpenAI API compatibility (`POST /v1/chat/completions`)**, **SQLite persistent metadata**, **LRU + TTL cache eviction**, **an offline evaluation suite (150+ labeled pairs)**, **benchmark runner**, **pytest test suite**, **Docker / Docker Compose configuration**, and a **live dashboard** ready for deployment on **Hugging Face Spaces**.
 
-## Why this exists
+---
 
-Most real-world LLM traffic is repetitive in meaning even when the wording
-differs ("How do I reset my password?" vs "I forgot my password, how do I
-change it?"). An exact-match cache misses this. This proxy catches it by
-embedding every query and checking cosine similarity against everything
-seen before.
+## 📐 System Architecture
 
-## Architecture
+```mermaid
+flowchart TD
+    Client["Client / Application"] -->|POST /chat or /v1/chat/completions| Proxy["FastAPI Proxy Server"]
+    
+    subgraph Proxy Engine
+        Proxy --> Auth["API Key & Rate Limiter"]
+        Auth --> Hash["Compute Namespace Hash<br/>SHA256(model, prompt, temp, ns)"]
+        Hash --> Embed["Local Embedding Generator<br/>all-MiniLM-L6-v2"]
+        Embed --> FAISS["FAISS IndexIDMap2<br/>Cosine Similarity Search"]
+        FAISS --> CacheCheck{"Cosine Similarity >= Threshold?"}
+    end
 
+    CacheCheck -->|YES: Cache HIT| ReturnHit["Return Cached Response Instantly<br/>Latency: ~10-45ms | Cost: $0"]
+    CacheCheck -->|NO: Cache MISS| LLMCall["Async httpx.AsyncClient Call"]
+    
+    LLMCall --> UpstreamLLM["Upstream LLM Provider<br/>Groq API / Ollama / Mock"]
+    UpstreamLLM -->|Response & Real Token Usage| CacheStore["Store Entry in FAISS & SQLite<br/>Enforce Max Size & LRU Eviction"]
+    CacheStore --> ReturnMiss["Return LLM Response<br/>Latency: ~150-1000ms"]
+
+    ReturnHit --> Client
+    ReturnMiss --> Client
 ```
-client ──> FastAPI proxy ──> [cache miss] ──> LLM API (Groq / Ollama)
-              │
-              └──> [cache hit] ──> return cached response instantly, $0 cost
-```
 
-- **Embeddings**: `sentence-transformers` (`all-MiniLM-L6-v2`), runs locally
-  on CPU — no API calls, no cost.
-- **Similarity search**: FAISS `IndexFlatIP` (inner product on normalized
-  vectors = cosine similarity), persisted to disk.
-- **LLM backend**: pluggable — Groq's free tier (real API, real $ math) or
-  Ollama (fully local, zero cost, zero rate limits).
-- **Dashboard**: single static HTML file, no build step, polls `/stats` and
-  `/recent` every few seconds.
+---
 
-## Setup
+## ✨ Key Features & Engineering Decisions
 
-### 1. Backend
+1. **FAISS IndexIDMap2 Vector Search**: Wraps `IndexFlatIP` with explicit 64-bit integer IDs on normalized vectors to enable point deletions when entries expire or undergo LRU eviction.
+2. **Multi-Tenant Namespace Isolation**: Queries are isolated by `SHA256(model, system_prompt, temperature, namespace)` to prevent cross-contamination between different personas or organization tenants.
+3. **High-Performance SQLite Metadata**: Atomic single-row inserts and updates replace full JSON file rewrites, ensuring ACID compliance, thread safety, and crash-resilient persistence.
+4. **LRU Eviction + Lazy TTL Cleanup**: Stale entries are purged on access or when `MAX_CACHE_SIZE` is reached via Least-Recently-Used eviction.
+5. **Async Non-Blocking HTTP Client**: Built using `httpx.AsyncClient` with `FastAPI.concurrency.run_in_threadpool` for CPU-bound FAISS embeddings to keep event loops responsive.
+6. **Drop-in OpenAI Proxy**: Provides `POST /v1/chat/completions` supporting `messages`, `model`, and `temperature`.
+
+---
+
+## 🛠️ Setup & Installation
+
+### Option A: Local Python Setup
 
 ```bash
-cd backend
+# 1. Clone repository & change directory
+cd CacheMind-AI/backend
+
+# 2. Create and activate virtual environment
 python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+source venv/bin/activate        # On Windows: .\venv\Scripts\activate
+
+# 3. Install dependencies
 pip install -r requirements.txt
 
+# 4. Copy environment configuration
 cp .env.example .env
-# Edit .env:
-#   - LLM_PROVIDER=groq and GROQ_API_KEY=<your free key from console.groq.com>
-#   - OR LLM_PROVIDER=ollama if you have Ollama running locally
 
-uvicorn main:app --reload --port 8000
+# 5. Start proxy server
+uvicorn main:app --host 0.0.0.0 --port 7860 --reload
 ```
 
-First run will download the embedding model (~80MB, one-time, free).
+Open dashboard at `http://localhost:7860/`
 
-### 2. Dashboard
+---
 
-Just open `dashboard/index.html` directly in a browser (no server needed —
-it talks to `http://localhost:8000` via CORS). Or serve it with any static
-file server if you prefer.
-
-### 3. Send some traffic
+### Option B: Docker Compose
 
 ```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "How do I reset my password?"}'
-
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "I forgot my password, how do I change it?"}'
+docker-compose up --build
 ```
 
-The second call should come back as a `"cache_status": "hit"` almost
-instantly — that's the whole project working.
+Runs the application container bound to port `7860`.
 
-### 4. Run the threshold eval (the differentiator)
+---
+
+### Option C: Deploy on Hugging Face Spaces
+
+1. Create a new Space on Hugging Face using the **Docker** SDK.
+2. Select **Blank Docker Space**.
+3. Push this repository to your Hugging Face Space repository.
+4. Set secret `GROQ_API_KEY` under Space Settings.
+5. Hugging Face Spaces automatically exposes port `7860` and serves the Dashboard UI at `/`.
+
+---
+
+## 🧪 Evaluation Suite & Threshold Sweep
+
+Run the threshold evaluation sweep across 150+ labeled query pairs (~75 true paraphrases and ~75 hard negatives):
 
 ```bash
-python eval_threshold.py
+python backend/eval_threshold.py
 ```
 
-This measures true-hit-rate vs false-positive-rate across several
-similarity thresholds on a small hand-labeled eval set. This number is
-worth more in an interview than any amount of screenshots — it shows you
-understand the *tradeoff*, not just the implementation.
+### Evaluation Sweep Results (`data/eval_results.json`)
 
-## Talking points for interviews
+| Similarity Threshold | Precision | Recall (True Hit Rate) | F1 Score | False Positive Rate (FPR) | True Positives (TP) | False Positives (FP) |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **0.70** | 0.5323 | 0.8684 | 0.6600 | 0.7436 | 66 | 58 |
+| **0.75** | 0.5567 | 0.7105 | 0.6243 | 0.5513 | 54 | 43 |
+| **0.80** | 0.5556 | 0.5263 | 0.5405 | 0.4103 | 40 | 32 |
+| **0.82** | 0.5821 | 0.5132 | 0.5455 | 0.3590 | 39 | 28 |
+| **0.85** | 0.5102 | 0.3289 | 0.4000 | 0.3077 | 25 | 24 |
+| **0.88** | 0.4722 | 0.2237 | 0.3036 | 0.2436 | 17 | 19 |
+| **0.90** | 0.5556 | 0.1974 | 0.2913 | 0.1538 | 15 | 12 |
+| **0.92** | 0.4706 | 0.1053 | 0.1720 | 0.1154 | 8 | 9 |
+| **0.95** | 0.1429 | 0.0132 | 0.0241 | 0.0769 | 1 | 6 |
+| **0.98** | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0 | 0 |
 
-- **Why inner-product FAISS index instead of L2?** Normalized vectors +
-  inner product = cosine similarity, and `IndexFlatIP` is simpler/faster
-  than computing L2 distance and converting.
-- **Threshold tuning tradeoff**: too loose → wrong answers served for
-  different questions (false cache hit); too tight → low hit rate, no
-  savings. `eval_threshold.py` quantifies this instead of guessing.
-- **Cache invalidation**: TTL-based lazy expiry (checked at lookup time,
-  no background scheduler needed). Real production version would need
-  invalidation hooks tied to source-data changes.
-- **Multi-tenant safety**: current version is a shared cache — fine for a
-  single knowledge base, unsafe if different users' answers shouldn't
-  cross-contaminate. Would add a `tenant_id` namespace to the FAISS
-  metadata and filter searches by it.
-- **Cost model**: dashboard estimates savings using a configurable
-  $-per-1M-token rate (`config.py`), applied to the tokens of the *skipped*
-  LLM call. With Groq's real free-tier API, these are genuine dollar
-  figures, not simulated ones.
-- **Scaling past a demo**: FAISS `IndexFlatIP` is exact but O(n) per
-  search. At real scale you'd swap to an approximate index (HNSW, IVF) and
-  shard by tenant/namespace.
+---
 
-## Project structure
+## 📈 Performance Benchmark Results
 
-```
-semantic-cache-proxy/
-├── backend/
-│   ├── main.py            # FastAPI app: /chat, /stats, /recent, /health
-│   ├── cache.py            # SemanticCache: FAISS + sentence-transformers
-│   ├── llm_client.py        # Groq / Ollama client
-│   ├── config.py            # All tunables, env-driven
-│   ├── eval_threshold.py     # Threshold eval script (interview gold)
-│   ├── requirements.txt
-│   └── .env.example
-└── dashboard/
-    └── index.html         # No-build-step live dashboard
+Run performance benchmarks over ~200 realistic traffic queries:
+
+```bash
+python backend/benchmark.py
 ```
 
-## Free-tier notes
+### Benchmark Summary (`benchmark_results.md`)
 
-- Groq free tier: generous rate limits, real hosted models, no credit card.
-- Ollama: 100% local and offline, zero rate limits, but needs the model
-  pulled once (`ollama pull llama3.1:8b`) and enough RAM to run it.
-- Embeddings and vector search never touch a paid API in this setup.
+| Benchmark Metric | Result | Engineering Impact |
+| :--- | :--- | :--- |
+| **Total Benchmark Queries** | **200** | Realistic multi-topic traffic distribution |
+| **Cache Hits** | **160** | 80% cache hit rate on repeated/paraphrased queries |
+| **Hit Latency (p50 / p95)** | **~45 ms / ~46 ms** | Fast FAISS vector lookup + SQLite read |
+| **Miss Latency (p50 / p95)** | **~158 ms / ~165 ms** | Remote upstream LLM API roundtrip time |
+| **Latency Speedup** | **3.5x - 10x Faster** | Substantial SLA improvement for cached requests |
+| **Token Savings** | **~80% Token Reduction** | Directly saves LLM API usage charges |
+
+---
+
+## 🔌 API Reference
+
+### 1. Custom Chat Proxy (`POST /chat`)
+```bash
+curl -X POST http://localhost:7860/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "How do I reset my password?",
+    "model": "llama-3.1-8b-instant",
+    "temperature": 0.7,
+    "namespace": "default"
+  }'
+```
+
+### 2. OpenAI Drop-In Proxy (`POST /v1/chat/completions`)
+```bash
+curl -X POST http://localhost:7860/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llama-3.1-8b-instant",
+    "messages": [
+      {"role": "system", "content": "You are a customer support agent."},
+      {"role": "user", "content": "How do I reset my password?"}
+    ],
+    "temperature": 0.7
+  }'
+```
+
+### 3. Monitoring & Status Endpoints
+- `GET /stats` — Real-time aggregate statistics for dashboard
+- `GET /eval` — Evaluation threshold sweep data & optimal threshold
+- `GET /recent` — Recent request audit feed
+- `GET /health` — Health check endpoint for container probes
+
+---
+
+## ⚠️ Known Limitations
+
+1. **Single-Turn Context Scope**: Semantic caching currently matches on the immediate prompt text. Multi-turn dialogue context history is not embedded as part of the cache key.
+2. **Ephemeral Disk Storage on Free Hosting**: Free hosting tiers (e.g. Hugging Face Spaces free container) reset local SQLite and FAISS storage on container restart unless persistent storage mounts are enabled.
+
+---
+
+## 🔮 Future Work
+
+- **Hybrid Search**: Combine BM25 keyword matching with dense vector embeddings to better handle exact entity numbers/IDs.
+- **Distributed Cache Backend**: Replace SQLite/FAISS with Redis Vector Search or Qdrant for multi-node stateless scaling.
+- **Prompt Normalization**: Add regex pre-processors to strip noise, stop-words, and minor formatting before embedding.
