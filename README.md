@@ -84,28 +84,6 @@ similarity thresholds on a small hand-labeled eval set. This number is
 worth more in an interview than any amount of screenshots — it shows you
 understand the *tradeoff*, not just the implementation.
 
-## Talking points for interviews
-
-- **Why inner-product FAISS index instead of L2?** Normalized vectors +
-  inner product = cosine similarity, and `IndexFlatIP` is simpler/faster
-  than computing L2 distance and converting.
-- **Threshold tuning tradeoff**: too loose → wrong answers served for
-  different questions (false cache hit); too tight → low hit rate, no
-  savings. `eval_threshold.py` quantifies this instead of guessing.
-- **Cache invalidation**: TTL-based lazy expiry (checked at lookup time,
-  no background scheduler needed). Real production version would need
-  invalidation hooks tied to source-data changes.
-- **Multi-tenant safety**: current version is a shared cache — fine for a
-  single knowledge base, unsafe if different users' answers shouldn't
-  cross-contaminate. Would add a `tenant_id` namespace to the FAISS
-  metadata and filter searches by it.
-- **Cost model**: dashboard estimates savings using a configurable
-  $-per-1M-token rate (`config.py`), applied to the tokens of the *skipped*
-  LLM call. With Groq's real free-tier API, these are genuine dollar
-  figures, not simulated ones.
-- **Scaling past a demo**: FAISS `IndexFlatIP` is exact but O(n) per
-  search. At real scale you'd swap to an approximate index (HNSW, IVF) and
-  shard by tenant/namespace.
 
 ## Project structure
 
@@ -123,9 +101,3 @@ semantic-cache-proxy/
     └── index.html         # No-build-step live dashboard
 ```
 
-## Free-tier notes
-
-- Groq free tier: generous rate limits, real hosted models, no credit card.
-- Ollama: 100% local and offline, zero rate limits, but needs the model
-  pulled once (`ollama pull llama3.1:8b`) and enough RAM to run it.
-- Embeddings and vector search never touch a paid API in this setup.
