@@ -100,6 +100,7 @@ python backend/eval_threshold.py
 
 ### Evaluation Sweep Results (`data/eval_results.json`)
 
+<<<<<<< HEAD
 | Similarity Threshold | Precision | Recall (True Hit Rate) | F1 Score | False Positive Rate (FPR) | True Positives (TP) | False Positives (FP) |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **0.70** | 0.5323 | 0.8684 | 0.6600 | 0.7436 | 66 | 58 |
@@ -114,6 +115,8 @@ python backend/eval_threshold.py
 | **0.98** | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0 | 0 |
 
 ---
+=======
+>>>>>>> fd6797cd165f55dc764b019eb9dfef7fc69903ad
 
 ## 📈 Performance Benchmark Results
 
@@ -123,6 +126,7 @@ Run performance benchmarks over ~200 realistic traffic queries:
 python backend/benchmark.py
 ```
 
+<<<<<<< HEAD
 ### Benchmark Summary (`benchmark_results.md`)
 
 | Benchmark Metric | Result | Engineering Impact |
@@ -184,3 +188,5 @@ curl -X POST http://localhost:7860/v1/chat/completions \
 - **Hybrid Search**: Combine BM25 keyword matching with dense vector embeddings to better handle exact entity numbers/IDs.
 - **Distributed Cache Backend**: Replace SQLite/FAISS with Redis Vector Search or Qdrant for multi-node stateless scaling.
 - **Prompt Normalization**: Add regex pre-processors to strip noise, stop-words, and minor formatting before embedding.
+=======
+>>>>>>> fd6797cd165f55dc764b019eb9dfef7fc69903ad
